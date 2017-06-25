@@ -5,3 +5,5 @@ authors = ["David Peklak <dpeklak@gmail.com>"]
 
 [dependencies]
 toml = "0.4.1"
+error-chain = "0.10.0"
+
