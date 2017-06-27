@@ -24,8 +24,8 @@ fn run() -> Result<()> {
     let cargo = env::var("CARGO")
         .chain_err(|| "environment variable CARGO not set")?;
 
-    let toml_str = read_string(Path::new("Cargo.toml"))
-        .chain_err(|| "No Cargo.toml")?;
+    let toml_str = read_string(Path::new("Cargo.toml"))?;
+
     let mut toml: Table = toml::from_str(&toml_str)
         .chain_err(|| "failed to parse Cargo.toml")?;
 
@@ -52,7 +52,7 @@ fn run() -> Result<()> {
         .spawn()
         .expect("cargo test failed");
 
-    copy("Cargo.lock.bk", "Cargo.lock")
+    rename("Cargo.lock.bk", "Cargo.lock")
         .chain_err(|| "Failed to rename Cargo.lock.bk to Cargo.lock")?;
     rename("Cargo.toml.bk", "Cargo.toml")
         .chain_err(|| "Failed to rename Cargo.toml.bk to Cargo.toml")?;
@@ -68,7 +68,7 @@ fn read_string(path: &Path) -> Result<String> {
 
     let mut buf = String::new();
     f.read_to_string(&mut buf)
-        .chain_err(|| "Feiled to read to string")?;
+        .chain_err(|| "Feiled to read to string from {}", path)?;
     Ok(buf)
 }
 
