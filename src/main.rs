@@ -1,11 +1,10 @@
 #![recursion_limit = "1024"]
 
-#[macro_use]
-extern crate error_chain;
 extern crate docopt;
 #[macro_use]
+extern crate error_chain;
+#[macro_use]
 extern crate serde_derive;
-
 extern crate toml;
 
 use docopt::Docopt;
@@ -17,11 +16,12 @@ use std::process::Command;
 use toml::value::{Value, Table};
 
 const USAGE: &'static str = "
-cargo-stdx-check
+stdx-check
 
 Usage:
-    cargo-stdx-check (-h | --help)
-    cargo-stdx-check test
+    stdx-check (-h | --help)
+    stdx-check test
+    stdx-check dupes
 
 Options:
     -h --help     Show this screen.
@@ -29,7 +29,8 @@ Options:
 
 #[derive(Debug, Deserialize)]
 struct Args {
-    cmd_test: bool
+    cmd_test: bool,
+    cmd_dupes: bool
 }
 
 mod errors {
@@ -42,19 +43,37 @@ quick_main!(run);
 
 fn run() -> Result<()> {
     let args: Result<Args> = Docopt::new(USAGE)
-        .and_then(|d| d.deserialize())
-        .chain_err(|| "bla");
+        .map(|d| d.argv(env::args().skip(1)))
+        .and_then(|d| d.parse())
+        .and_then(|v| v.deserialize())
+        .chain_err(|| "Failed to deserialize docopt");
 
     match args {
         Err(_) => {
-            println!("{}", USAGE);
+            print_usage();
             Ok(())
+        },
+        Ok(ref ar) => if ar.cmd_test && !ar.cmd_dupes {
+            with_backups(|cargo| test(cargo))
+        } else if ar.cmd_dupes && !ar.cmd_test {
+            with_backups(|cargo| dupes(cargo))
+        } else {
+            with_backups(|cargo| {
+                test(cargo)?;
+                dupes(cargo)
+            })
         }
-        Ok(ref ar) => if ar.cmd_test { test() } else { Ok(()) }
     }
 }
 
-fn test() -> Result<()> {
+fn print_usage() -> () {
+    println!("
+    {}
+    ", USAGE);
+}
+
+fn with_backups<F>(fun: F) -> Result<()>
+    where F: Fn(&str) -> Result<()> {
     let cargo = env::var("CARGO")
         .chain_err(|| "environment variable CARGO not set")?;
 
@@ -66,46 +85,58 @@ fn test() -> Result<()> {
     {
         let maybe_deps = toml.get_mut("dependencies");
         if let Some(&mut Value::Table(ref mut deps)) = maybe_deps {
-            deps.insert("stdx".to_string(), Value::String("0.117.0".to_string()));
+            deps.insert("stdx".to_string(), Value::String("0.1".to_string()));
         }
     }
 
     let toml_str = toml::to_string(&toml)
-        .chain_err(|| "Cannot convert value to string")?;
+        .chain_err(|| "Cannot convert toml to string")?;
 
     let _bkup_toml = Backup::new("Cargo.toml", "Cargo.toml.bk")?;
 
-    write_string(Path::new("Cargo.toml"), &toml_str)
-        .chain_err(|| "Failed to write Cargo.toml")?;
+    write_string(Path::new("Cargo.toml"), &toml_str)?;
 
     let _bkup_lock = Backup::new("Cargo.lock", "Cargo.lock.bk")?;
 
+    fun(&cargo)
+}
+
+fn test(cargo: &str) -> Result<()> {
     Command::new(cargo)
         .arg("test")
-        .spawn()
-        .expect("cargo test failed");
+        .status()
+        .chain_err(|| "Failed to execute 'cargo test'")
+        .and_then(|exit_status| {
+            if exit_status.success() {
+                Ok(())
+            } else {
+                bail!("'cargo test' failed");
+            }
+        })
+}
 
+fn dupes(_cargo: &str) -> Result<()> {
+    println!("Checking dupes");
     Ok(())
 }
 
 fn read_string(path: &Path) -> Result<String> {
     let file = File::open(path)
-        .chain_err(|| "Failed to open file")?;
+        .chain_err(|| format!("Failed to open file {}", path.to_str().unwrap_or("()")))?;
 
     let mut f = BufReader::new(file);
 
     let mut buf = String::new();
     f.read_to_string(&mut buf)
-        .chain_err(|| "Failed to read to string from file")?;
+        .chain_err(|| format!("Failed to read to string from file {}", path.to_str().unwrap_or("()")))?;
     Ok(buf)
 }
 
 pub fn write_string(path: &Path, s: &str) -> Result<()> {
     let mut f = File::create(path)
-        .chain_err(|| "Failed to create file")?;
+        .chain_err(|| format!("Failed to create file {}", path.to_str().unwrap_or("()")))?;
     f.write_all(s.as_bytes())
-        .chain_err(|| "Failed to write to file")?;
-    Ok(())
+        .chain_err(|| format!("Failed to write to file{}", path.to_str().unwrap_or("()")))
 }
 
 struct Backup<'a> {
@@ -123,7 +154,6 @@ impl<'a> Backup<'a> {
 
 impl<'a> Drop for Backup<'a> {
     fn drop(&mut self) {
-        println!("Renaming {} to {}", self.bkup, self.orig);
         copy(self.bkup, self.orig)
             .expect("Failed to restore file");
     }
