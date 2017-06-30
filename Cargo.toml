@@ -1,6 +1,6 @@
 [package]
 name = "cargo-stdx-check"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["David Peklak <dpeklak@gmail.com>"]
 description = "The stdx-check tool determines whether any given crate is 'compatible' with stdx"
 license = "MIT"
