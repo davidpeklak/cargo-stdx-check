@@ -4,6 +4,12 @@ version = "0.1.1"
 authors = ["David Peklak <dpeklak@gmail.com>"]
 description = "The stdx-check tool determines whether any given crate is 'compatible' with stdx"
 license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/davidpeklak/cargo-stdx-check"
+repository = "https://github.com/davidpeklak/cargo-stdx-check"
+
+[badges]
+travis-ci = { repository = "davidpeklak/cargo-stdx-check", branch = "master" }
 
 [dependencies]
 toml = "0.4.1"
