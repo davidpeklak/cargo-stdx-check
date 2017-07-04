@@ -60,9 +60,9 @@ fn run() -> Result<()> {
         .chain_err(|| "Failed to deserialize docopt");
 
     match args {
-        Err(e) => {
+        Err(_) => {
             print_usage();
-            Err(e)
+            Ok(())
         }
         Ok(ref ar) => {
             let stdx_opt = StdxOpt::from(ar);
