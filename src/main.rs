@@ -174,9 +174,11 @@ fn dupes(cargo: &str) -> Result<()> {
 
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
 
-    for name in paks
+    let pak_names = paks
         .iter()
-        .filter_map(extract_name) {
+        .filter_map(extract_name);
+
+    for name in pak_names {
         *counts.entry(name).or_insert(0) += 1;
     }
 
