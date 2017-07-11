@@ -9,7 +9,7 @@ extern crate toml;
 
 use docopt::Docopt;
 use std::env;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{copy, File, rename};
 use std::io::{BufReader, Read, Write};
 use std::path::Path;
@@ -172,30 +172,32 @@ fn dupes(cargo: &str) -> Result<()> {
 
     let paks = get_packages(&mut lock)?;
 
-    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
-
-    let pak_names = paks
+    let pak_names_versions = paks
         .iter()
-        .filter_map(extract_name);
+        .filter_map(extract_name_version);
 
-    for name in pak_names {
-        *counts.entry(name).or_insert(0) += 1;
+    let mut grouped: BTreeMap<&str, BTreeSet<Option<&str>>> = BTreeMap::new();
+
+    for (name, version_opt) in pak_names_versions {
+        let mut set = grouped.entry(name).or_insert(BTreeSet::new());
+        set.insert(version_opt);
     }
 
-    for (name, count) in counts
+    for (name, versions) in grouped
         .iter()
-        .filter(|&(_, count)| *count > 1) {
-        println!("{} appears {} times", name, count)
+        .filter(|&(_, versions)| !versions.is_empty()) {
+        println!("{} appears {} times", name, versions.len())
     }
 
     Ok(())
 }
 
-fn extract_name(val: &toml::Value) -> Option<&str> {
+fn extract_name_version(val: &toml::Value) -> Option<(&str, Option<&str>)> {
     match val {
         &Value::Table(ref entries) => {
-            match entries.get("name") {
-                Some(&Value::String(ref name)) => Some(name),
+            match (entries.get("name"), entries.get("vesrion")) {
+                (Some(&Value::String(ref name)), Some(&Value::String(ref version))) => Some((name, Some(version))),
+                (Some(&Value::String(ref name)), None) => Some((name, None)),
                 _ => None
             }
         }
