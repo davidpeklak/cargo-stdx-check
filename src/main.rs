@@ -102,7 +102,8 @@ fn with_backups<F>(fun: F, stdx_opt: &StdxOpt) -> Result<()>
 
     write_string(Path::new("Cargo.toml"), &toml_str)?;
 
-    write_string(Path::new("Cargo.toml.bk2"), &toml_str)?;
+    copy("Cargo.toml", "Cargo.toml.bk2")
+        .chain_err(|| "Failed to backup intermediate Cargo.toml file")?;
 
     let _bkup_lock = Backup::new("Cargo.lock", "Cargo.lock.bk")?;
 
@@ -166,7 +167,10 @@ fn test(cargo: &str) -> Result<()> {
 }
 
 fn dupes(cargo: &str) -> Result<()> {
-    exec_cargo(cargo, "build")?;
+    exec_cargo(cargo, "generate-lockfile")?;
+
+    copy("Cargo.lock", "Cargo.lock.bk2")
+        .chain_err(|| "Failed to backup intermediate Cargo.lock file")?;
 
     let mut lock = parse_cargo_toml("cargo.lock")?;
 
@@ -185,8 +189,14 @@ fn dupes(cargo: &str) -> Result<()> {
 
     for (name, versions) in grouped
         .iter()
-        .filter(|&(_, versions)| !versions.is_empty()) {
-        println!("{} appears {} times", name, versions.len())
+        .filter(|&(_, versions)| versions.len() > 1) {
+        println!("{} appears {} times", name, versions.len());
+        for version in versions {
+            match version {
+              &None => println!("v: None"),
+              &Some(v) => println!("v: {}", v)
+            }
+        }
     }
 
     Ok(())
@@ -195,7 +205,7 @@ fn dupes(cargo: &str) -> Result<()> {
 fn extract_name_version(val: &toml::Value) -> Option<(&str, Option<&str>)> {
     match val {
         &Value::Table(ref entries) => {
-            match (entries.get("name"), entries.get("vesrion")) {
+            match (entries.get("name"), entries.get("version")) {
                 (Some(&Value::String(ref name)), Some(&Value::String(ref version))) => Some((name, Some(version))),
                 (Some(&Value::String(ref name)), None) => Some((name, None)),
                 _ => None
